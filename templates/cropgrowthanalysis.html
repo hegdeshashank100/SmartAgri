@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Growth Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='cropgrowthanalysis.css') }}">
+    <style>
+        .video-container {
+            margin: 20px 0;
+        }
+        #video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 15px;
+            box-shadow: 5px 5px 10px rgba(209, 217, 230, 0.5), -5px -5px 10px rgba(255, 255, 255, 0.5);
+        }
+        #preview {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 15px;
+            border: 2px solid #ccc;
+            box-shadow: 5px 5px 10px rgba(209, 217, 230, 0.5), -5px -5px 10px rgba(255, 255, 255, 0.5);
+        }
+        .capture-btn, .upload-btn {
+            margin: 10px 0;
+            padding: 10px 20px;
+            background-color: rgba(224, 229, 236, 0.8);
+            color: #333;
+            border: none;
+            border-radius: 15px;
+            box-shadow: 5px 5px 10px rgba(209, 217, 230, 0.5), -5px -5px 10px rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .capture-btn:hover, .upload-btn:hover {
+            box-shadow: inset 5px 5px 10px rgba(209, 217, 230, 0.5), inset -5px -5px 10px rgba(255, 255, 255, 0.5);
+        }
+        .record {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            box-shadow: inset 5px 5px 10px rgba(209, 217, 230, 0.5), inset -5px -5px 10px rgba(255, 255, 255, 0.5);
+        }
+        .record img {
+            max-width: 300px;
+            border-radius: 10px;
+            box-shadow: 5px 5px 10px rgba(209, 217, 230, 0.5), -5px -5px 10px rgba(255, 255, 255, 0.5);
+        }
+        #analysisResult {
+            margin-top: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            box-shadow: inset 5px 5px 10px rgba(209, 217, 230, 0.5), inset -5px -5px 10px rgba(255, 255, 255, 0.5);
+            padding: 15px;
+            color: #333;
+            display: none; /* Hidden by default, show via JS if needed */
+        }
+    </style>
+</head>
+<body>
+    <!-- Neumorphic Header -->
+    <header class="neumorphic-header">
+        <a href="{{ url_for('index') }}" class="back-btn">Back to Home</a>
+        <h1>Crop Growth Analysis</h1>
+        <div></div> <!-- Spacer for symmetry -->
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="chat-container">
+        <div id="records">
+            {% for record in records %}
+                <div class="record">
+                    <p><strong>Date:</strong> {{ record.date }}</p>
+                    <p><strong>Activity:</strong> {{ record.activity }}</p>
+                    <p><strong>Growth Report:</strong> {{ record.growth_report }}</p>
+                    {% if record.photo %}
+                        <img src="data:image/jpeg;base64,{{ record.photo }}" alt="Crop Photo">
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        <h2>Upload New Crop Photo</h2>
+        <div>
+            <input type="file" id="photoInput" accept="image/*" class="form-control">
+            <button class="upload-btn" onclick="uploadPhoto()">Upload Photo</button>
+        </div>
+
+        <h2>Capture Photo with Camera</h2>
+        <div class="video-container">
+            <video id="video" width="400" height="300" autoplay></video>
+            <button class="capture-btn" onclick="capturePhoto()">Capture Photo</button>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <img id="preview" alt="Captured Photo">
+        </div>
+
+        <div id="analysisResult"></div> <!-- Placeholder for future AI analysis feedback -->
+    </div>
+
+    <!-- Neumorphic Footer -->
+    <footer class="neumorphic-footer">
+        <p>&copy; 2025 SmartAgri Team. All rights reserved.</p>
+    </footer>
+
+    <script>
+        // Camera access and photo capture
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const preview = document.getElementById('preview');
+        const videoContainer = document.querySelector('.video-container');
+        const analysisResult = document.getElementById('analysisResult');
+
+        // Request camera permission
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                videoContainer.style.display = 'block';
+            })
+            .catch(err => {
+                alert('Camera access denied or unavailable: ' + err.message);
+            });
+
+        function capturePhoto() {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => {
+                const formData = new FormData();
+                formData.append('cropPhoto', blob, 'captured_photo.jpg');
+                formData.append('activity', prompt('Enter activity details:', 'No activity recorded'));
+
+                fetch('/daily-crop-analysis', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => alert('Error uploading photo: ' + error));
+            }, 'image/jpeg');
+        }
+
+        function uploadPhoto() {
+            const fileInput = document.getElementById('photoInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a photo first!');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('cropPhoto', file);
+            formData.append('activity', prompt('Enter activity details:', 'No activity recorded'));
+
+            fetch('/daily-crop-analysis', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => alert('Error uploading photo: ' + error));
+        }
+    </script>
+</body>
+</html>

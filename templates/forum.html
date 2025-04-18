@@ -1,0 +1,207 @@
+<!-- START of updated forum.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartAgri - Community Forum</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+  <style>
+    .forum-container {
+      width: 90%;
+      max-width: 800px;
+      margin: 80px auto 60px auto;
+      background: rgba(224, 229, 236, 0.5);
+      border-radius: 20px;
+      padding: 20px;
+      backdrop-filter: blur(5px);
+    }
+    .post-card {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 15px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 5px 5px 10px rgba(209, 217, 230, 0.5), -5px -5px 10px rgba(255, 255, 255, 0.5);
+    }
+    .vote-btn {
+      cursor: pointer;
+      font-size: 1.2rem;
+      margin: 0 5px;
+    }
+    .comment-section {
+      margin-top: 10px;
+    }
+    .comment-input {
+      width: 80%;
+      margin-right: 5px;
+    }
+    .comment-item {
+      background: rgba(240, 240, 240, 0.9);
+      padding: 5px;
+      border-radius: 5px;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header class="neumorphic-header">
+    <a href="{{ url_for('index') }}" class="back-btn">Back</a>
+    <h1>Community Forum</h1>
+  </header>
+
+  <div class="forum-container">
+    <h2>Share and Learn</h2>
+    <form id="postForm" class="mb-3">
+      <textarea class="form-control mb-2" id="postContent" rows="3" placeholder="Share your farming tips or questions..." required></textarea>
+      <button type="submit" class="neumorphic-button">Post</button>
+    </form>
+    <div id="postsList"></div>
+  </div>
+
+  <div class="modal fade" id="factCheckModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Fact Check Result</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="modalMessage"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn neumorphic-button" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="neumorphic-footer">
+    <p>© 2025 SmartAgri. All rights reserved.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Show modal
+    function showModal(message) {
+      const modalMessage = document.getElementById('modalMessage');
+      const modal = new bootstrap.Modal(document.getElementById('factCheckModal'));
+      modalMessage.textContent = message;
+      modal.show();
+    }
+
+    // Load comments for a post from embedded data
+    function loadComments(postId, comments) {
+      const commentList = document.getElementById(`comments-${postId}`);
+      if (commentList) {
+        commentList.innerHTML = comments.map(comment =>
+          `<div class="comment-item">${comment.content} - ${comment.email || 'anonymous'}</div>`
+        ).join('');
+      }
+    }
+
+    // Load all posts
+    async function loadPosts() {
+      const postsList = document.getElementById('postsList');
+      postsList.innerHTML = '';
+      try {
+        const response = await fetch('/posts');
+        const posts = await response.json();
+        posts.forEach(post => {
+          const postDiv = document.createElement('div');
+          postDiv.className = 'post-card';
+          postDiv.innerHTML = `
+            <p>${post.content}</p>
+            <div>
+              <span class="vote-btn" onclick="vote('${post._id}', 'like')">👍 ${post.likes || 0}</span>
+              <span class="vote-btn" onclick="vote('${post._id}', 'dislike')">👎 ${post.dislikes || 0}</span>
+            </div>
+            <div class="comment-section">
+              <input type="text" class="comment-input form-control" placeholder="Add a comment..." id="comment-${post._id}">
+              <button class="neumorphic-button mt-2" onclick="addComment('${post._id}')">Comment</button>
+              <div class="comment-list" id="comments-${post._id}"></div>
+            </div>
+          `;
+          postsList.appendChild(postDiv);
+          loadComments(post._id, post.comments || []);
+        });
+      } catch (error) {
+        console.error('Load posts error:', error);
+        postsList.innerHTML = '<p>Error loading posts.</p>';
+      }
+    }
+
+    // Submit a new post
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('postForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const content = document.getElementById('postContent').value.trim();
+        if (!content) return alert('Please enter content.');
+        try {
+          const res = await fetch('/post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ content })
+          });
+          const result = await res.json();
+          if (result.status === 'success') {
+            document.getElementById('postContent').value = '';
+            showModal('Post verified and saved successfully!');
+            loadPosts();
+          } else {
+            showModal('Error: ' + result.message);
+          }
+        } catch (error) {
+          console.error('Post error:', error);
+          showModal('Error submitting post: ' + error.message);
+        }
+      });
+
+      loadPosts(); // Initial load
+    });
+
+    // Voting
+    async function vote(postId, action) {
+      try {
+        const response = await fetch('/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ postId, action })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+          loadPosts();
+        } else {
+          alert('Error voting: ' + result.message);
+        }
+      } catch (error) {
+        console.error('Vote error:', error);
+        alert('Error voting: ' + error.message);
+      }
+    }
+
+    // Add comment
+    async function addComment(postId) {
+      const input = document.getElementById(`comment-${postId}`);
+      const content = input.value.trim();
+      if (!content) return alert('Enter a comment');
+      try {
+        const res = await fetch('/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ postId, content })
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+          input.value = '';
+          loadPosts();
+        } else {
+          alert('Comment failed: ' + result.message);
+        }
+      } catch (error) {
+        console.error('Comment error:', error);
+        alert('Error adding comment: ' + error.message);
+      }
+    }
+  </script>
+</body>
+</html>
+<!-- END of updated forum.html -->
